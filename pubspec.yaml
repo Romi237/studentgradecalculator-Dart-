@@ -1,0 +1,9 @@
+name: studentgradecalculator
+
+description: A simple console application to calculate student grades.
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  # no external dependencies

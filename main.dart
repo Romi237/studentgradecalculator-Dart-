@@ -1,39 +1,76 @@
+import 'dart:io';
+
+/// A very small data model representing a student with a single exam score.
+///
+/// The score itself is nullable (`double?`) to reinforce handling of missing
+/// information, and the `name` is treated as an ordinary string. All of the
+/// project objectives (nullable types, null‑safety, control flow, input
+/// validation) are exercised here.
 class Student {
   final String name;
-  final double? grade1;
-  final double? grade2;
-  final double? grade3;
+  final double? score;
 
-  Student({required this.name, this.grade1, this.grade2, this.grade3});
+  Student({required this.name, this.score});
 
-  /// Compute the average of non-null grades. Returns `null` when no grades
-  /// have been provided so we can handle the absence of data safely.
-  double? get average {
-    final grades = <double?>[grade1, grade2, grade3];
-    // filter out nulls
-    final valid = grades.where((g) => g != null).cast<double>().toList();
-    if (valid.isEmpty) return null;
-    return valid.reduce((a, b) => a + b) / valid.length;
+  /// Human‑readable name; fall back to a default when the caller provided an
+  /// empty string or only whitespace.
+  String get displayName {
+    final trimmed = name.trim();
+    return trimmed.isEmpty ? 'Unknown Student' : trimmed;
   }
 
-  /// Provide a letter representation for the calculated average. Uses a
-  /// `switch` with `when` clauses (Dart 3) to show the Kotlin-like `when`
-  /// behaviour the user asked for.
+  /// Convert the numeric score into a letter grade.  The method is tolerant
+  /// of `null` and out‑of‑range values so callers don't need to perform
+  /// additional checks.
   String get letterGrade {
-    final avg = average;
-    if (avg == null) return 'N/A';
-    return _letterForAverage(avg);
-  }
+    if (score == null) return 'N/A';
+    if (score! < 0 || score! > 100) return 'Invalid';
 
-  static String _letterForAverage(double avg) {
-    switch (avg) {
-      case var g when g >= 90:
+    switch (score!.toInt()) {
+      case 100:
+      case 99:
+      case 98:
+      case 97:
+      case 96:
+      case 95:
+      case 94:
+      case 93:
+      case 92:
+      case 91:
+      case 90:
         return 'A';
-      case var g when g >= 80:
+      case 89:
+      case 88:
+      case 87:
+      case 86:
+      case 85:
+      case 84:
+      case 83:
+      case 82:
+      case 81:
+      case 80:
         return 'B';
-      case var g when g >= 70:
+      case 79:
+      case 78:
+      case 77:
+      case 76:
+      case 75:
+      case 74:
+      case 73:
+      case 72:
+      case 71:
+      case 70:
         return 'C';
-      case var g when g >= 60:
+      case 69:
+      case 68:
+      case 67:
+      case 66:
+      case 65:
+      case 64:
+      case 63:
+      case 62:
+      case 61:
+      case 60:
         return 'D';
       default:
         return 'F';
@@ -41,22 +78,43 @@ class Student {
   }
 }
 
-void main() {
-  // A handful of sample students demonstrating nullable inputs and safe
-  // navigation.
-  final students = <Student>[
-    Student(name: 'Alice', grade1: 95, grade2: 85),
-    Student(name: 'Bob'), // no grades at all
-    Student(name: 'Charlie', grade2: 72), // one grade null
-    Student(name: 'Diana', grade1: null, grade2: null, grade3: null),
-  ];
+/// Prompt the user repeatedly until they enter a valid score between 0 and
+/// 100.  Returns `null` only if the user hits EOF (Ctrl‑Z on Windows or
+/// Ctrl‑D on *nix).
+double? promptForScore() {
+  while (true) {
+    stdout.write('Enter student score (0–100): ');
+    final line = stdin.readLineSync();
+    if (line == null) return null; // EOF
 
-  for (var s in students) {
-    // the Elvis operator `??` provides a sensible default if average is null.
-    final avgStr = s.average?.toStringAsFixed(2) ?? 'no grades';
-    print('Student: ${s.name}');
-    print('Average: $avgStr');
-    print('Letter: ${s.letterGrade}');
-    print('-------------');
+    final value = double.tryParse(line);
+    if (value == null) {
+      print('Invalid input – please type a number.');
+      continue;
+    }
+    if (value < 0 || value > 100) {
+      print('Score must be between 0 and 100.');
+      continue;
+    }
+    return value;
   }
+}
+
+/// The entry point for the console application.  Prompts the user for a name
+/// and score, constructs a [Student], and prints out the derived grade.
+void main() {
+  print('=== Student Grade Calculator ===');
+
+  stdout.write('Enter student name: ');
+  final rawName = stdin.readLineSync();
+  final name = rawName ?? ''; // null → empty string for simplicity
+
+  final score = promptForScore();
+
+  final student = Student(name: name, score: score);
+
+  print('\n--- Result ---');
+  print('Name : ${student.displayName}');
+  print('Score: ${student.score?.toStringAsFixed(2) ?? 'N/A'}');
+  print('Grade: ${student.letterGrade}');
 }
