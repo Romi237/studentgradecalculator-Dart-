@@ -1,6 +1,7 @@
-name: studentgradecalculator
+name: student_grade_calculator
 description: A student grade calculator with GUI that processes Excel/PDF files
-version: 1.0.0
+publish_to: 'none'
+version: 1.0.0+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -8,11 +9,18 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  excel: ^2.0.0  # For Excel file processing
-  pdf: ^3.10.4   # For PDF generation
-  file_picker: ^5.3.3  # For file selection
-  path_provider: ^2.1.0  # For file system access
-  open_file: ^3.3.2  # To open generated files
+  excel: ^2.0.0
+  pdf: ^3.10.4
+  file_picker: ^5.3.3
+  path_provider: ^2.1.0
+  open_file: ^3.3.2
+  permission_handler: ^11.0.1
+  universal_html: ^2.2.4  # For web compatibility
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
