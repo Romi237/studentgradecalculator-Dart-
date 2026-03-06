@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'dart:io' show Platform, File;
-import 'dart:html' show Blob, AnchorElement, Url; // Fixed import syntax
+import 'dart:html' show Blob, AnchorElement, Url;
 
 void main() => runApp(const GradeCalculatorApp());
 
 class GradeCalculatorApp extends StatelessWidget {
   const GradeCalculatorApp({super.key});
-
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Student Grade Calculator',
@@ -25,7 +24,6 @@ class GradeCalculatorApp extends StatelessWidget {
 
 class GradeCalculatorHome extends StatefulWidget {
   const GradeCalculatorHome({super.key});
-
   @override
   State<GradeCalculatorHome> createState() => _GradeCalculatorHomeState();
 }
@@ -185,10 +183,8 @@ class _GradeCalculatorHomeState extends State<GradeCalculatorHome> {
       if (!(file.extension?.contains('xls') ?? false)) {
         return _showDialog('Error', 'Please select an Excel file');
       }
-
-      if (file.bytes == null) {
+      if (file.bytes == null)
         return _showDialog('Error', 'Could not read file bytes');
-      }
 
       final excel = Excel.decodeBytes(file.bytes!);
       final List<Student> parsed = [];
@@ -196,14 +192,11 @@ class _GradeCalculatorHomeState extends State<GradeCalculatorHome> {
       for (var table in excel.tables.keys) {
         var sheet = excel.tables[table];
         if (sheet == null) continue;
-
         for (int i = 1; i < sheet.rows.length; i++) {
           var row = sheet.rows[i];
           if (row.length < 2) continue;
-
           var name = row[0]?.value?.toString().trim();
           var score = double.tryParse(row[1]?.value?.toString() ?? '');
-
           if (name != null && name.isNotEmpty) {
             parsed.add(Student(name: name, score: score));
           }
@@ -252,79 +245,132 @@ class _GradeCalculatorHomeState extends State<GradeCalculatorHome> {
   }
 
   Future<void> _exportToExcel() async {
-    var excel = Excel.createExcel();
-    var sheet = excel['Grades'];
-    sheet.appendRow(['Name', 'Score', 'Grade']);
-    students.forEach((s) => sheet.appendRow(
-        [s.displayName, s.score?.toStringAsFixed(2) ?? 'N/A', s.letterGrade]));
+    try {
+      var excel = Excel.createExcel();
+      var sheet = excel['Grades'];
+      sheet.appendRow(['Name', 'Score', 'Grade']);
 
-    final bytes = excel.save();
-    if (bytes == null) return;
+      // Using forEach lambda
+      students.forEach((s) => sheet.appendRow([
+            s.displayName,
+            s.score?.toStringAsFixed(2) ?? 'N/A',
+            s.letterGrade
+          ]));
 
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
+      // Add summary using higher-order functions
+      var passed =
+          students.where((s) => s.score != null && s.score! >= 60).length;
+      var avg = students
+              .map((s) => s.score)
+              .where((s) => s != null)
+              .cast<double>()
+              .fold(0.0, (a, b) => a + b) /
+          students.where((s) => s.score != null).length;
 
-    if (Platform.isWindows ||
-        Platform.isLinux ||
-        Platform.isMacOS ||
-        Platform.isAndroid ||
-        Platform.isIOS) {
-      var dir = await getApplicationDocumentsDirectory();
-      var path = '${dir.path}/grades_$timestamp.xlsx';
-      File(path).writeAsBytesSync(bytes);
-      _showDialog('Success', 'Saved to: $path');
-      OpenFile.open(path);
-    } else {
-      final blob = Blob([bytes]);
-      final url = Url.createObjectUrlFromBlob(blob);
-      AnchorElement(href: url)
-        ..download = 'grades_$timestamp.xlsx'
-        ..click();
-      Url.revokeObjectUrl(url);
-      _showDialog('Success', 'File downloaded');
+      sheet.appendRow([]);
+      sheet.appendRow(['SUMMARY', '', '']);
+      sheet.appendRow(['Total:', students.length.toString(), '']);
+      sheet.appendRow(['Passed:', passed.toString(), '']);
+      sheet.appendRow(['Failed:', (students.length - passed).toString(), '']);
+      sheet.appendRow(['Average:', avg.toStringAsFixed(2), '']);
+
+      var fileBytes = excel.save();
+      if (fileBytes == null)
+        return _showDialog('Error', 'Failed to generate Excel file');
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      if (kIsWeb) {
+        final blob = Blob([fileBytes]);
+        final url = Url.createObjectUrlFromBlob(blob);
+        AnchorElement(href: url)
+          ..target = 'blank'
+          ..download = 'grades_$timestamp.xlsx'
+          ..click();
+        Url.revokeObjectUrl(url);
+        _showDialog('Success', 'Excel file downloaded!');
+      } else {
+        var dir = await getApplicationDocumentsDirectory();
+        var path = '${dir.path}/grades_$timestamp.xlsx';
+        await File(path).writeAsBytes(fileBytes);
+        _showDialog('Success', 'Excel file saved!');
+        OpenFile.open(path);
+      }
+    } catch (e) {
+      _showDialog('Error', 'Failed to export Excel: $e');
     }
   }
 
   Future<void> _exportToPDF() async {
-    final pdf = pw.Document();
-    pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
-      build: (_) => [
-        pw.Header(level: 0, child: pw.Text('Student Grades')),
-        pw.TableHelper.fromTextArray(
-          headers: ['Name', 'Score', 'Grade'],
-          data: students
-              .map((s) => [
-                    s.displayName,
-                    s.score?.toStringAsFixed(2) ?? 'N/A',
-                    s.letterGrade
-                  ])
-              .toList(),
+    try {
+      final pdf = pw.Document();
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          build: (_) => [
+            pw.Header(
+                level: 0,
+                child: pw.Text('Student Grade Report',
+                    style: pw.TextStyle(
+                        fontSize: 24, fontWeight: pw.FontWeight.bold))),
+            pw.SizedBox(height: 20),
+            pw.Text('Generated: ${DateTime.now().toString().substring(0, 19)}',
+                style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
+            pw.SizedBox(height: 30),
+            pw.Table.fromTextArray(
+              headers: ['Name', 'Score', 'Grade'],
+              data: students
+                  .map((s) => [
+                        s.displayName,
+                        s.score?.toStringAsFixed(2) ?? 'N/A',
+                        s.letterGrade
+                      ])
+                  .toList(),
+              border: pw.TableBorder.all(),
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              headerDecoration:
+                  const pw.BoxDecoration(color: PdfColors.grey300),
+              cellHeight: 30,
+            ),
+            pw.SizedBox(height: 30),
+            pw.Text('Summary',
+                style:
+                    pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+            pw.SizedBox(height: 10),
+            pw.Text('Total Students: ${students.length}'),
+            pw.Text('Average Score: ${_calculateAverage().toStringAsFixed(2)}'),
+          ],
         ),
-      ],
-    ));
+      );
 
-    final bytes = await pdf.save();
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final bytes = await pdf.save();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-    if (Platform.isWindows ||
-        Platform.isLinux ||
-        Platform.isMacOS ||
-        Platform.isAndroid ||
-        Platform.isIOS) {
-      var dir = await getApplicationDocumentsDirectory();
-      var path = '${dir.path}/grades_$timestamp.pdf';
-      await File(path).writeAsBytes(bytes);
-      _showDialog('Success', 'Saved to: $path');
-      OpenFile.open(path);
-    } else {
-      final blob = Blob([bytes]);
-      final url = Url.createObjectUrlFromBlob(blob);
-      AnchorElement(href: url)
-        ..download = 'grades_$timestamp.pdf'
-        ..click();
-      Url.revokeObjectUrl(url);
-      _showDialog('Success', 'File downloaded');
+      if (kIsWeb) {
+        final blob = Blob([bytes]);
+        final url = Url.createObjectUrlFromBlob(blob);
+        AnchorElement(href: url)
+          ..target = 'blank'
+          ..download = 'grades_$timestamp.pdf'
+          ..click();
+        Url.revokeObjectUrl(url);
+        _showDialog('Success', 'PDF file downloaded!');
+      } else {
+        var dir = await getApplicationDocumentsDirectory();
+        var path = '${dir.path}/grades_$timestamp.pdf';
+        await File(path).writeAsBytes(bytes);
+        _showDialog('Success', 'PDF file saved!');
+        OpenFile.open(path);
+      }
+    } catch (e) {
+      _showDialog('Error', 'Failed to export PDF: $e');
     }
+  }
+
+  double _calculateAverage() {
+    var scores =
+        students.where((s) => s.score != null).map((s) => s.score!).toList();
+    return scores.isEmpty ? 0 : scores.reduce((a, b) => a + b) / scores.length;
   }
 
   void _showDialog(String title, String msg) => showDialog(
