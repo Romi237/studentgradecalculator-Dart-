@@ -1,1 +1,1 @@
-execute "dart run main.dart" to run
+execute "flutter run" to run
